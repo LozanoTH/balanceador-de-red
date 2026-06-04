@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Router Pro Manager</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        :root { 
+            --bg: #050508; 
+            --surface: #0f0f1a; 
+            --card: #161625; 
+            --border: #252538; 
+            --text: #ececf3; 
+            --text2: #9494b8; 
+            --accent: #3b82f6; 
+            --accent-glow: rgba(59, 130, 246, 0.4);
+            --green: #10b981; 
+            --red: #f43f5e; 
+            --yellow: #f59e0b;
+        }
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px;
+            display: flex; justify-content: center; line-height: 1.5;
+        }
+        
+        .app { width: 100%; max-width: 650px; padding: 20px; }
+        
+        /* Header */
+        .header { display: flex; align-items: center; gap: 15px; padding: 10px 5px 25px; }
+        .header h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; flex: 1; background: linear-gradient(135deg, #fff 0%, var(--text2) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        .dot { width: 12px; height: 12px; border-radius: 50%; position: relative; }
+        .dot::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; opacity: 0.4; }
+        .dot.on { background: var(--green); } .dot.on::after { background: var(--green); animation: pulse 2s infinite; }
+        .dot.off { background: var(--red); }
+        
+        @keyframes pulse { 0% { transform: scale(1); opacity: 0.4; } 70% { transform: scale(2.5); opacity: 0; } 100% { transform: scale(1); opacity: 0; } }
+
+        /* Diagram Section (Vertical Tree) */
+        .topology-card { background: var(--card); border-radius: 20px; border: 1px solid var(--border); padding: 20px; margin-bottom: 25px; position: relative; }
+        .topology-container { height: 280px; position: relative; overflow: hidden; width: 100%; }
+        
+        .node { display: flex; flex-direction: column; align-items: center; gap: 6px; z-index: 2; position: absolute; width: 100px; transition: all 0.3s ease; }
+        .node-icon { width: 44px; height: 44px; background: var(--surface); border: 2px solid var(--border); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; transition: all 0.3s; z-index: 3; }
+        .node.active .node-icon { border-color: var(--accent); box-shadow: 0 0 15px var(--accent-glow); color: #fff; background: var(--card); }
+        .node.inactive .node-icon { opacity: 0.4; filter: grayscale(1); }
+        .node-label { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); text-align: center; white-space: nowrap; }
+        .node.active .node-label { color: var(--text); }
+        
+        .node-icon.server { background: var(--accent); color: #fff; border-color: #fff; }
+
+        .connector { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 5px; overflow-x: auto; padding: 4px; background: var(--surface); border-radius: 14px; margin-bottom: 20px; scrollbar-width: none; border: 1px solid var(--border); }
+        .tabs::-webkit-scrollbar { display: none; }
+        .tab-btn {
+            flex-shrink: 0; padding: 10px 18px; cursor: pointer; border: none;
+            background: transparent; color: var(--text2); border-radius: 10px;
+            font-size: 0.8rem; font-weight: 600; transition: all 0.2s;
+        }
+        .tab-btn.active { background: var(--card); color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.3); border: 1px solid var(--border); }
+
+        /* Cards & UI */
+        .section { display: none; }
+        .section.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .card { background: var(--card); border-radius: 18px; padding: 20px; border: 1px solid var(--border); margin-bottom: 15px; }
+        .card-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text2); font-weight: 700; margin-bottom: 15px; display: block; }
+
+        .item { background: var(--surface); border-radius: 12px; padding: 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border); }
+        .info-main { font-weight: 600; color: #fff; font-size: 0.9rem; }
+        .info-sub { font-size: 0.7rem; color: var(--text2); }
+
+        .badge { font-size: 0.65rem; padding: 4px 10px; border-radius: 8px; font-weight: 700; text-transform: uppercase; }
+        .badge.on { background: rgba(16, 185, 129, 0.1); color: var(--green); }
+        .badge.off { background: rgba(244, 63, 94, 0.1); color: var(--red); }
+        .badge.info { background: rgba(59, 130, 246, 0.1); color: var(--accent); }
+
+        .btn { padding: 10px 20px; border-radius: 12px; border: none; cursor: pointer; font-weight: 700; font-size: 0.85rem; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 4px 15px var(--accent-glow); }
+        .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+        .btn-danger { background: rgba(244, 63, 94, 0.1); color: var(--red); border: 1px solid rgba(244, 63, 94, 0.2); }
+        
+        input { width: 100%; padding: 12px 15px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.9rem; outline: none; }
+        input:focus { border-color: var(--accent); }
+
+        .stat-row { display: flex; gap: 10px; margin-bottom: 10px; }
+        .stat-item { flex: 1; background: var(--surface); padding: 15px; border-radius: 14px; border: 1px solid var(--border); text-align: center; }
+        .stat-value { font-size: 1.2rem; font-weight: 800; color: #fff; }
+        .stat-label { font-size: 0.6rem; color: var(--text2); text-transform: uppercase; margin-top: 4px; font-weight: 700; }
+
+        #toast { position: fixed; top: 25px; left: 50%; transform: translateX(-50%); background: var(--card); color: var(--text); padding: 12px 25px; border-radius: 14px; font-size: 0.9rem; font-weight: 600; border: 1px solid var(--border); box-shadow: 0 10px 40px rgba(0,0,0,0.8); opacity: 0; transition: all 0.3s; z-index: 1000; }
+        #toast.show { opacity: 1; transform: translateX(-50%) translateY(10px); }
+
+        .device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .device-mini-card { background: var(--surface); padding: 12px; border-radius: 14px; border: 1px solid var(--border); cursor: pointer; transition: 0.2s; }
+        .device-mini-card.active { border-color: var(--accent); background: rgba(59, 130, 246, 0.05); }
+    </style>
+</head>
+<body>
+
+<div class="app">
+    <div class="header">
+        <div class="dot" id="status-dot"></div>
+        <h1>Router Pro</h1>
+        <div id="wan-status" class="badge info">Cargando...</div>
+    </div>
+
+    <!-- Diagrama de Red (Packet Tracer Style) -->
+    <div class="topology-card">
+        <span class="card-title">Topología de Red</span>
+        <div class="topology-container" id="topo-container">
+            <svg class="connector" id="topology-svg"></svg>
+            
+            <!-- Uplinks (Top) -->
+            <div id="node-up-0" class="node" style="top: 20px; left: 15%;">
+                <div class="node-icon">📱</div>
+                <div class="node-label">Phone 1</div>
+            </div>
+            <div id="node-up-1" class="node" style="top: 20px; right: 15%;">
+                <div class="node-icon">📱</div>
+                <div class="node-label">Phone 2</div>
+            </div>
+
+            <!-- Server (Middle) -->
+            <div id="node-server" class="node active" style="top: 115px; left: 50%; transform: translateX(-50%);">
+                <div class="node-icon server">🖥️</div>
+                <div class="node-label">Servidor</div>
+            </div>
+
+            <!-- Clients (Bottom) -->
+            <div id="node-clients" class="node" style="bottom: 20px; left: 50%; transform: translateX(-50%);">
+                <div class="node-icon">👥</div>
+                <div class="node-label" id="client-count-label">0 Clientes</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tabs" id="tab-bar">
+        <button class="tab-btn active" data-tab="wifi">Wi-Fi</button>
+        <button class="tab-btn" data-tab="android">Android</button>
+        <button class="tab-btn" data-tab="clients">Equipos</button>
+        <button class="tab-btn" data-tab="booster">Booster</button>
+        <button class="tab-btn" data-tab="net">Herramientas</button>
+    </div>
+
+    <!-- Secciones -->
+    <div id="wifi" class="section active">
+        <div class="card">
+            <span class="card-title">Configuración Punto de Acceso</span>
+            <div style="display: grid; gap: 15px;">
+                <div><label class="stat-label">SSID</label><input type="text" id="ssid"></div>
+                <div><label class="stat-label">Contraseña</label><input type="password" id="password"></div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" style="flex: 2;" onclick="updateWifi()">Aplicar Cambios</button>
+                    <button class="btn btn-danger" style="flex: 1;" onclick="stopWifi()">Apagar</button>
+                </div>
+            </div>
+        </div>
+        <div class="stat-row">
+            <div class="stat-item"><div class="stat-value" id="info-channel">?</div><div class="stat-label">Canal</div></div>
+            <div class="stat-item"><div class="stat-value" id="info-freq">?</div><div class="stat-label">Frecuencia</div></div>
+            <div class="stat-item"><div class="stat-value" id="info-clients">0</div><div class="stat-label">Equipos</div></div>
+        </div>
+    </div>
+
+    <div id="android" class="section">
+        <div class="card">
+            <span class="card-title">Dispositivos Android (ADB)</span>
+            <div class="device-grid" id="android-device-list"></div>
+            <div id="selected-device-detail">
+                <div class="empty">Selecciona un dispositivo</div>
+            </div>
+        </div>
+        <div id="device-controls" style="display: none;">
+            <div class="card">
+                <span class="card-title">Batería y Energía</span>
+                <div id="device-battery-info"></div>
+            </div>
+            <div class="card">
+                <span class="card-title">Acciones</span>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <button onclick="androidAction('wake')" class="btn btn-secondary btn-sm">Encender</button>
+                    <button onclick="androidAction('lock')" class="btn btn-secondary btn-sm">Bloquear</button>
+                    <button onclick="androidToggle('usb-tether','on')" class="btn btn-primary btn-sm">USB Tether ON</button>
+                    <button onclick="androidToggle('usb-tether','off')" class="btn btn-danger btn-sm">USB Tether OFF</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="clients" class="section">
+        <div class="card">
+            <span class="card-title">Equipos Conectados</span>
+            <div id="clients-list"></div>
+        </div>
+    </div>
+
+    <div id="booster" class="section">
+        <div class="card">
+            <span class="card-title">Acelerador de Caché</span>
+            <div id="booster-stats"></div>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="btn btn-primary" style="flex:1;" id="btn-booster-toggle" onclick="boosterToggleAuto()">Activar</button>
+                <button class="btn btn-secondary" onclick="boosterClear()">Limpiar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="net" class="section">
+        <div class="card">
+            <span class="card-title">Diagnóstico de Red</span>
+            <button class="btn btn-secondary btn-full" onclick="runSpeedTest()" id="btn-speed" style="width:100%;">Probar Latencia</button>
+            <div id="speed-result" style="margin-top: 15px;"></div>
+        </div>
+        <div class="card">
+            <span class="card-title">Logs Recientes</span>
+            <div id="log-content" style="background: #000; color: #0f0; padding: 15px; border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; max-height: 200px; overflow-y: auto;"></div>
+        </div>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let currentSerial = null;
+let boosterEnabled = false;
+
+// ─── Navegación ─────────────────────────────────────────────
+document.getElementById('tab-bar').addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab-btn');
+    if (!btn) return;
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(btn.dataset.tab).classList.add('active');
+    btn.classList.add('active');
+});
+
+function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show';
+    setTimeout(() => t.className = '', 3000);
+}
+
+// ─── Diagrama (Topología) ──────────────────────────────────
+function drawLine(el1, el2, active, isPrimary) {
+    const svg = document.getElementById('topology-svg');
+    const rect1 = el1.querySelector('.node-icon').getBoundingClientRect();
+    const rect2 = el2.querySelector('.node-icon').getBoundingClientRect();
+    const svgRect = svg.getBoundingClientRect();
+    
+    const x1 = rect1.left + rect1.width/2 - svgRect.left;
+    const y1 = rect1.top + rect1.height/2 - svgRect.top;
+    const x2 = rect2.left + rect2.width/2 - svgRect.left;
+    const y2 = rect2.top + rect2.height/2 - svgRect.top;
+    
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    
+    if (isPrimary) {
+        line.setAttribute('stroke', 'var(--green)');
+        line.setAttribute('stroke-width', '3');
+        line.setAttribute('stroke-dasharray', '8,4');
+        const anim = document.createElementNS('http://www.w3.org/2000/svg', 'animate');
+        anim.setAttribute('attributeName', 'stroke-dashoffset');
+        anim.setAttribute('from', '100');
+        anim.setAttribute('to', '0');
+        anim.setAttribute('dur', '2s');
+        anim.setAttribute('repeatCount', 'indefinite');
+        line.appendChild(anim);
+    } else {
+        line.setAttribute('stroke', active ? 'var(--accent)' : 'var(--border)');
+        line.setAttribute('stroke-width', '2');
+        if (!active) line.setAttribute('stroke-dasharray', '4');
+    }
+    
+    if (active || isPrimary) {
+        line.setAttribute('filter', `drop-shadow(0 0 5px ${isPrimary ? 'var(--green)' : 'var(--accent-glow)'})`);
+    }
+    
+    svg.appendChild(line);
+}
+
+function updateTopology(data) {
+    const svg = document.getElementById('topology-svg');
+    svg.innerHTML = '';
+    const serverNode = document.getElementById('node-server');
+    const clientsNode = document.getElementById('node-clients');
+
+    // Uplinks (Phones)
+    data.uplinks.forEach((up, i) => {
+        const node = document.getElementById('node-up-' + i);
+        if (!node) return;
+        node.className = `node ${up.active ? 'active' : 'inactive'}`;
+        node.querySelector('.node-label').innerHTML = up.name + (up.primary ? '<br><span style="color:var(--green); font-size:0.5rem;">[ ACTIVO ]</span>' : '');
+        drawLine(node, serverNode, up.active, up.primary);
+    });
+
+    // Clients
+    const hasClients = data.clients.length > 0;
+    clientsNode.className = `node ${hasClients ? 'active' : 'inactive'}`;
+    document.getElementById('client-count-label').textContent = data.clients.length + ' Clientes';
+    drawLine(serverNode, clientsNode, hasClients, false);
+}
+
+// ─── Status ───────────────────────────────────────────────
+async function refresh() {
+    try {
+        const res = await fetch('/status');
+        const data = await res.json();
+
+        document.getElementById('status-dot').className = 'dot ' + (data.active ? 'on' : 'off');
+        const wan = document.getElementById('wan-status');
+        wan.textContent = data.wan_ok ? 'ONLINE' : 'OFFLINE';
+        wan.className = 'badge ' + (data.wan_ok ? 'on' : 'off');
+
+        document.getElementById('ssid').value = data.ssid;
+        document.getElementById('password').value = data.password;
+        document.getElementById('info-channel').textContent = data.channel;
+        document.getElementById('info-freq').textContent = data.frequency;
+        document.getElementById('info-clients').textContent = data.clients.length;
+
+        const clList = document.getElementById('clients-list');
+        clList.innerHTML = data.clients.length ? data.clients.map(c => `
+            <div class="item">
+                <div><div class="info-main">${c.hostname || 'Equipo'}</div><div class="info-sub">${c.ip} • ${c.mac}</div></div>
+                <div class="badge info">${(c.speed/1024).toFixed(1)} KB/s</div>
+            </div>
+        `).join('') : '<div class="empty">Sin equipos</div>';
+
+        updateTopology(data);
+    } catch(e) {}
+}
+
+// ─── Android ──────────────────────────────────────────────
+async function loadAndroidDevices() {
+    try {
+        const res = await fetch('/android/devices');
+        const devices = await res.json();
+        const grid = document.getElementById('android-device-list');
+        grid.innerHTML = devices.map(d => `
+            <div class="device-mini-card ${currentSerial === d.id ? 'active' : ''}" onclick="selectDevice('${d.id}')">
+                <div style="font-weight:700; font-size:0.75rem;">${d.id}</div>
+                <div class="badge ${d.status === 'conectado' ? 'on' : 'off'}" style="font-size:0.5rem; margin-top:5px;">${d.status}</div>
+            </div>
+        `).join('');
+        if (currentSerial) selectDevice(currentSerial);
+    } catch(e) {}
+}
+
+async function selectDevice(serial) {
+    currentSerial = serial;
+    document.querySelectorAll('.device-mini-card').forEach(c => c.classList.toggle('active', c.innerText.includes(serial)));
+    document.getElementById('device-controls').style.display = 'block';
+    
+    const infoRes = await fetch('/android/info?serial=' + serial);
+    const info = await infoRes.json();
+    document.getElementById('selected-device-detail').innerHTML = `
+        <div class="item">
+            <div><div class="info-main">${info.model}</div><div class="info-sub">Android ${info.version} • ${info.ip}</div></div>
+        </div>
+    `;
+
+    const battRes = await fetch('/android/battery?serial=' + serial);
+    const batt = await battRes.json();
+    const color = batt.level > 20 ? 'var(--green)' : 'var(--red)';
+    document.getElementById('device-battery-info').innerHTML = `
+        <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:5px;">
+            <span>Carga</span><strong>${batt.level}%</strong>
+        </div>
+        <div style="height:6px; background:var(--surface); border-radius:10px; overflow:hidden;">
+            <div style="width:${batt.level}%; height:100%; background:${color};"></div>
+        </div>
+        <div style="margin-top:8px; font-size:0.65rem; color:var(--text2);">${batt.status} • ${batt.temperature}</div>
+    `;
+}
+
+async function androidAction(a) { await fetch(`/android/${a}?serial=${currentSerial}`, {method:'POST'}); toast('Comando enviado'); }
+async function androidToggle(t, a) {
+    const res = await fetch(`/android/${t}?serial=${currentSerial}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:a})});
+    const d = await res.json(); toast(d.message);
+}
+
+// ─── Booster ──────────────────────────────────────────────
+async function loadBooster() {
+    const res = await fetch('/booster/status');
+    const s = await res.json();
+    boosterEnabled = s.enabled;
+    document.getElementById('btn-booster-toggle').textContent = s.enabled ? 'Desactivar' : 'Activar';
+    document.getElementById('booster-stats').innerHTML = `
+        <div class="stat-row">
+            <div class="stat-item"><div class="stat-value">${s.cache_items}</div><div class="stat-label">Archivos</div></div>
+            <div class="stat-item"><div class="stat-value">${s.hit_ratio}%</div><div class="stat-label">Aciertos</div></div>
+        </div>
+    `;
+}
+
+async function boosterToggleAuto() {
+    await fetch('/booster/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({enabled:!boosterEnabled})});
+    loadBooster();
+}
+
+async function boosterClear() { await fetch('/booster/clear', {method:'POST'}); toast('Caché limpia'); loadBooster(); }
+
+// ─── Otros ────────────────────────────────────────────────
+async function updateWifi() {
+    const ssid = document.getElementById('ssid').value;
+    const password = document.getElementById('password').value;
+    await fetch('/start', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ssid, password})});
+    toast('Aplicando configuración...');
+}
+
+async function stopWifi() { await fetch('/stop', {method:'POST'}); toast('Wi-Fi apagado'); }
+
+async function runSpeedTest() {
+    const btn = document.getElementById('btn-speed');
+    btn.disabled = true; btn.textContent = 'Midiendo...';
+    const res = await fetch('/speed-test', {method:'POST'});
+    const data = await res.json();
+    document.getElementById('speed-result').innerHTML = `
+        <div class="stat-item"><div class="stat-value">${data.latency_ms} ms</div><div class="stat-label">Latencia</div></div>
+    `;
+    btn.disabled = false; btn.textContent = 'Probar Latencia';
+}
+
+async function loadLogs() {
+    const res = await fetch('/logs?lines=20');
+    const data = await res.json();
+    document.getElementById('log-content').textContent = data.logs.join('\n');
+}
+
+// ─── Init ──────────────────────────────────────────────────
+setInterval(refresh, 5000);
+setInterval(loadAndroidDevices, 10000);
+window.addEventListener('resize', refresh);
+refresh();
+loadAndroidDevices();
+loadBooster();
+loadLogs();
+</script>
+
+</body>
+</html>
