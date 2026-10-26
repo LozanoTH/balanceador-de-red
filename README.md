@@ -1,3 +1,6 @@
+[![Licencia](https://img.shields.io/github/license/LozanoTH/balanceador-de-red)](LICENSE)
+[![Lenguaje](https://img.shields.io/github/languages/top/LozanoTH/balanceador-de-red)](https://github.com/LozanoTH/balanceador-de-red)
+
 #  Router Pro Manager
 
 ```text
